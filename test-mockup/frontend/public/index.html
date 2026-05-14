@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- FAIL: Sin Content-Security-Policy meta tag -->
+  <!-- FAIL: Sin X-Frame-Options (debe estar en header HTTP, pero tampoco en meta) -->
+  <title>Mockup App</title>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- FAIL: Inline script — viola CSP strict y es vector de XSS -->
+  <script>
+    window.__APP_CONFIG__ = {
+      version: '1.0.0',
+      debug: true,
+      apiBase: 'http://localhost:3001/api',
+    };
+    // FAIL: Clave de analytics hardcodeada en HTML público
+    window.__GA_KEY__ = 'UA-123456789-1';
+  </script>
+
+  <!-- FAIL: Script externo sin Subresource Integrity (SRI) -->
+  <script src="https://cdn.example.com/analytics.js"></script>
+</body>
+</html>
