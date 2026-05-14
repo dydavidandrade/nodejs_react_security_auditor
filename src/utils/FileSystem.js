@@ -11,7 +11,16 @@ const ALWAYS_IGNORE = [
 class FileSystem {
   constructor(rootDir) {
     this.rootDir = rootDir;
+    this.igAlways = this._buildAlwaysIgnore();
     this.ig = this._buildIgnore();
+    this.igGit = this._buildGitIgnore();
+  }
+
+  /** Construye un matcher solo con las entradas de ALWAYS_IGNORE */
+  _buildAlwaysIgnore() {
+    const ig = ignore();
+    ig.add(ALWAYS_IGNORE);
+    return ig;
   }
 
   _buildIgnore() {
@@ -24,10 +33,63 @@ class FileSystem {
     return ig;
   }
 
+  /** Construye un matcher solo con las entradas del .gitignore del proyecto */
+  _buildGitIgnore() {
+    const ig = ignore();
+    const gitignorePath = path.join(this.rootDir, '.gitignore');
+    if (fs.existsSync(gitignorePath)) {
+      ig.add(fs.readFileSync(gitignorePath, 'utf8'));
+    }
+    return ig;
+  }
+
   _isIgnored(fullPath) {
     const rel = path.relative(this.rootDir, fullPath);
     if (!rel || rel.startsWith('..')) return true;
     return this.ig.ignores(rel);
+  }
+
+  /**
+   * Indica si un archivo está explícitamente ignorado por el .gitignore del proyecto
+   * (no considera ALWAYS_IGNORE, solo lo que el desarrollador puso en .gitignore).
+   * @param {string} fullPath - Ruta absoluta del archivo
+   * @returns {boolean}
+   */
+  isGitIgnored(fullPath) {
+    const rel = path.relative(this.rootDir, fullPath);
+    if (!rel || rel.startsWith('..')) return false;
+    try { return this.igGit.ignores(rel); } catch { return false; }
+  }
+
+  /**
+   * Busca archivos .env en el árbol de directorios, incluyendo los gitignoreados.
+   * Excluye solo ALWAYS_IGNORE, .env.example y .env.sample.
+   * @returns {string[]} Rutas absolutas de los archivos .env encontrados
+   */
+  findEnvFiles() {
+    const results = [];
+    const walk = (dir) => {
+      if (!fs.existsSync(dir)) return;
+      let entries;
+      try { entries = fs.readdirSync(dir); } catch { return; }
+      for (const entry of entries) {
+        const full = path.join(dir, entry);
+        const rel = path.relative(this.rootDir, full);
+        if (!rel || rel.startsWith('..')) continue;
+        let alwaysIgnored;
+        try { alwaysIgnored = this.igAlways.ignores(rel); } catch { alwaysIgnored = false; }
+        if (alwaysIgnored) continue;
+        let stat;
+        try { stat = fs.statSync(full); } catch { continue; }
+        if (stat.isDirectory()) {
+          walk(full);
+        } else if (/^\.env(\.[^/]*)?$/.test(entry) && !/\.(example|sample|test)$/.test(entry)) {
+          results.push(full);
+        }
+      }
+    };
+    walk(this.rootDir);
+    return results;
   }
 
   getAllFiles(extensions = []) {

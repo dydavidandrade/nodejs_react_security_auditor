@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git rebase *)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"cat\" git rebase -i 5a64ed3)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
+    ]
+  }
+}

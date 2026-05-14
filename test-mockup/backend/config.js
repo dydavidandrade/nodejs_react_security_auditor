@@ -3,7 +3,7 @@
 
 module.exports = {
   jwt: {
-    secret: "my_super_secret_jwt_key_2024_hardcoded", // FAIL: hardcoded secret
+    secret: process.env.JWT_PASS, // FAIL: hardcoded secret
     expiresIn: "7d", // FAIL: debería ser ≤15min
   },
   database: {

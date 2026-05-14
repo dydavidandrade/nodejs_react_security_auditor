@@ -27,6 +27,7 @@ class SecretsAnalyzer extends BaseAnalyzer {
   async analyze() {
     await this._runGitleaks();
     await this._runCustomPatterns();
+    await this._scanEnvFiles();
   }
 
   async _runGitleaks() {
@@ -51,11 +52,20 @@ class SecretsAnalyzer extends BaseAnalyzer {
     if (!Array.isArray(results)) return;
 
     for (const r of results) {
+      const filePath = r.File ? path.join(this.rootDir, r.File) : null;
+      const isEnvIgnored = filePath && /\.env(\.|$)/.test(path.basename(r.File || ''))
+        && this.fs.isGitIgnored(filePath);
+
       this.addFinding(new Finding({
         title: `[Gitleaks] Secreto detectado: ${r.RuleID || r.Description}`,
-        control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', severity: 'critical', category: 'secrets',
-        description: `Gitleaks detectó: ${r.Description || r.RuleID}. Commit: ${r.Commit || 'N/A'}`,
-        remediation_steps: 'Elimina el secreto del código inmediatamente. Revoca y rota la credencial comprometida. Usa git-filter-repo para limpiar el historial.',
+        control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', category: 'secrets',
+        severity: isEnvIgnored ? 'low' : 'critical',
+        description: isEnvIgnored
+          ? `Gitleaks detectó ${r.Description || r.RuleID} en ${r.File} — archivo en .gitignore, no se subirá al repositorio. Buena práctica en desarrollo; migrar a Secret Manager en producción.`
+          : `Gitleaks detectó: ${r.Description || r.RuleID}. Commit: ${r.Commit || 'N/A'}`,
+        remediation_steps: isEnvIgnored
+          ? 'El .env está correctamente ignorado. Para producción usar GCP Secret Manager, AWS Secrets Manager o HashiCorp Vault en lugar de archivos .env.'
+          : 'Elimina el secreto del código inmediatamente. Revoca y rota la credencial comprometida. Usa git-filter-repo para limpiar el historial.',
         file: r.File || null, line: r.StartLine || null, evidence_uri: r.File ? `${r.File}:${r.StartLine}` : null,
       }));
     }
@@ -63,7 +73,8 @@ class SecretsAnalyzer extends BaseAnalyzer {
   }
 
   async _runCustomPatterns() {
-    const files = this.fs.getAllFiles(['.js', '.ts', '.jsx', '.tsx', '.env', '.json', '.yaml', '.yml', '.config.js']);
+    // Los archivos .env se gestionan en _scanEnvFiles() con lógica de gitignore
+    const files = this.fs.getAllFiles(['.js', '.ts', '.jsx', '.tsx', '.json', '.yaml', '.yml', '.config.js']);
     const skipEnvExample = /\.env\.example$|\.env\.sample$/;
 
     for (const file of files) {
@@ -84,6 +95,51 @@ class SecretsAnalyzer extends BaseAnalyzer {
             file: this.fs.relative(file), line, evidence_uri: `${this.fs.relative(file)}:${line}`,
           }));
         }
+      }
+    }
+  }
+
+  /**
+   * Escanea archivos .env aunque estén en .gitignore.
+   * Si el archivo está correctamente ignorado → severidad low (buena práctica).
+   * Si NO está en .gitignore → severidad critical (riesgo de exposición).
+   */
+  async _scanEnvFiles() {
+    const envFiles = this.fs.findEnvFiles();
+    for (const file of envFiles) {
+      const content = this.fs.readFile(file);
+      if (!content) continue;
+
+      // Verificar si tiene algún valor con apariencia de secreto (no solo comentarios o variables vacías)
+      let hasSecrets = false;
+      for (const { re } of SECRET_PATTERNS) {
+        re.lastIndex = 0;
+        if (re.exec(content)) { hasSecrets = true; break; }
+      }
+      // También detectar asignaciones KEY=valor típicas de .env con valores no triviales
+      if (!hasSecrets && /^[A-Z][A-Z0-9_]+=.{6,}/m.test(content)) hasSecrets = true;
+
+      if (!hasSecrets) continue;
+
+      const relFile = this.fs.relative(file);
+      const isIgnored = this.fs.isGitIgnored(file);
+
+      if (isIgnored) {
+        this.addFinding(new Finding({
+          title: `Archivo .env con secretos — correctamente ignorado en .gitignore`,
+          control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', severity: 'low', category: 'secrets',
+          description: `El archivo "${relFile}" contiene variables de entorno con secretos. Está en .gitignore y no se subirá al repositorio — buena práctica para desarrollo local. En producción se recomienda usar un gestor de secretos centralizado.`,
+          remediation_steps: 'Continuar usando .env solo en entornos locales/desarrollo. En producción migrar a GCP Secret Manager, AWS Secrets Manager o HashiCorp Vault. Asegurarse de que .env nunca se añada a commits accidentalmente (usar pre-commit hooks).',
+          file: relFile, line: null, evidence_uri: relFile,
+        }));
+      } else {
+        this.addFinding(new Finding({
+          title: `Archivo .env con secretos NO está en .gitignore — riesgo de exposición`,
+          control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', severity: 'critical', category: 'secrets',
+          description: `El archivo "${relFile}" contiene secretos y NO aparece en .gitignore. Existe riesgo real de que las credenciales sean incluidas en un commit y expuestas en el repositorio.`,
+          remediation_steps: 'Agrega .env (y variantes como .env.local, .env.production) a .gitignore inmediatamente. Verifica con "git status" que no esté staged. Si ya fue commiteado, usa git-filter-repo para purgar el historial y rota todas las credenciales expuestas.',
+          file: relFile, line: null, evidence_uri: relFile,
+        }));
       }
     }
   }
