@@ -1,0 +1,92 @@
+import { execSync } from 'child_process';
+import path from 'path';
+import BaseAnalyzer from './BaseAnalyzer.js';
+import { Finding } from '../utils/Finding.js';
+
+const SECRET_PATTERNS = [
+  { name: 'AWS Access Key',       re: /AKIA[0-9A-Z]{16}/g },
+  { name: 'AWS Secret Key',       re: /(?:aws.secret|AWS_SECRET)[^=]*=\s*['"`]?([A-Za-z0-9+/]{40})['"`]?/gi },
+  { name: 'Private Key',          re: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
+  { name: 'Google API Key',       re: /AIza[0-9A-Za-z\\-_]{35}/g },
+  { name: 'Slack Token',          re: /xox[baprs]-[0-9a-zA-Z\-]{10,48}/g },
+  { name: 'GitHub Token',         re: /ghp_[0-9a-zA-Z]{36}|github_pat_[0-9a-zA-Z_]{82}/g },
+  { name: 'Stripe Key',           re: /sk_live_[0-9a-zA-Z]{24}/g },
+  { name: 'OpenAI Key',           re: /sk-[a-zA-Z0-9]{20,}/g },
+  { name: 'JWT Secret Hardcoded', re: /jwt\.sign\([^,]+,\s*['"`]([^'"`]{8,})['"`]/g },
+  { name: 'DB Password',          re: /(?:DB_PASS|DATABASE_URL|mongodb\+srv):\/\/[^:]+:([^@]+)@/gi },
+  { name: 'Generic Secret',       re: /(?:secret|password|passwd|api_key|apikey)\s*[=:]\s*['"`]([^'"`]{12,})['"`]/gi },
+];
+
+class SecretsAnalyzer extends BaseAnalyzer {
+  constructor(rootDir, fileSystem, logger, toolInstaller) {
+    super(rootDir, fileSystem, logger);
+    this.tools = toolInstaller;
+    this.tmpDir = fileSystem.getTmpDir();
+  }
+
+  async analyze() {
+    await this._runGitleaks();
+    await this._runCustomPatterns();
+  }
+
+  async _runGitleaks() {
+    if (!this.tools.has('gitleaks')) {
+      this.logger.warn('Gitleaks no disponible — usando escaneo de patrones personalizado');
+      return;
+    }
+
+    const outFile = path.join(this.tmpDir, 'gitleaks_report.json');
+    try {
+      this.logger.info('Ejecutando Gitleaks...');
+      const gitleaksCmd = this.tools.getCmd('gitleaks');
+      execSync(
+        `${gitleaksCmd} detect --source "${this.rootDir}" --report-format json --report-path "${outFile}" --no-git 2>/dev/null`,
+        { timeout: 120000, stdio: 'pipe' }
+      );
+    } catch {
+      // gitleaks exits 1 when secrets found
+    }
+
+    const results = this.fs.readJson(outFile);
+    if (!Array.isArray(results)) return;
+
+    for (const r of results) {
+      this.addFinding(new Finding({
+        title: `[Gitleaks] Secreto detectado: ${r.RuleID || r.Description}`,
+        control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', severity: 'critical', category: 'secrets',
+        description: `Gitleaks detectó: ${r.Description || r.RuleID}. Commit: ${r.Commit || 'N/A'}`,
+        remediation_steps: 'Elimina el secreto del código inmediatamente. Revoca y rota la credencial comprometida. Usa git-filter-repo para limpiar el historial.',
+        file: r.File || null, line: r.StartLine || null, evidence_uri: r.File ? `${r.File}:${r.StartLine}` : null,
+      }));
+    }
+    this.logger.info(`Gitleaks: ${results.length} secreto(s) encontrado(s)`);
+  }
+
+  async _runCustomPatterns() {
+    const files = this.fs.getAllFiles(['.js', '.ts', '.jsx', '.tsx', '.env', '.json', '.yaml', '.yml', '.config.js']);
+    const skipEnvExample = /\.env\.example$|\.env\.sample$/;
+
+    for (const file of files) {
+      if (skipEnvExample.test(file)) continue;
+      const content = this.fs.readFile(file);
+      if (!content) continue;
+
+      for (const { name, re } of SECRET_PATTERNS) {
+        re.lastIndex = 0;
+        const m = re.exec(content);
+        if (m) {
+          const line = this._lineOf(content, m.index);
+          this.addFinding(new Finding({
+            title: `Secreto potencial: ${name}`,
+            control_id: 'CRYPTO-04', asvs_id: 'ASVS 6.4.1', severity: 'critical', category: 'secrets',
+            description: `Patrón de ${name} detectado en ${this.fs.relative(file)}:${line}`,
+            remediation_steps: 'Elimina el secreto del código y del historial de git. Rota la credencial inmediatamente. Usa variables de entorno o Secret Manager.',
+            file: this.fs.relative(file), line, evidence_uri: `${this.fs.relative(file)}:${line}`,
+          }));
+        }
+      }
+    }
+  }
+}
+
+export default SecretsAnalyzer;

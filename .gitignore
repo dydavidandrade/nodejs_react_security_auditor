@@ -1,0 +1,61 @@
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Lock files (mantener pnpm-lock.yaml, ignorar npm)
+package-lock.json
+yarn.lock
+
+# Reportes generados por el auditor
+SEC_REPORT_*.md
+SEC_REPORT_*.json
+findings.json
+*.sarif
+zap_report*.html
+zap_report*.json
+gitleaks_report*.json
+trivy_report*.json
+
+# Artefactos temporales de escaneo
+.zap/
+.semgrep/
+tmp_audit/
+audit_artifacts/
+
+# Variables de entorno y secretos
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+secrets/
+
+# Configuración de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# Cobertura de tests
+coverage/
+.nyc_output/
+
+# Claude Code
+.claude/settings.local.json

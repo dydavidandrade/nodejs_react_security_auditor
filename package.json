@@ -1,0 +1,34 @@
+{
+  "name": "sec-auditor",
+  "version": "1.0.0",
+  "description": "Senior security auditor for Node.js + React applications - Ethical Hacking Tool",
+  "main": "index.js",
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "bin": {
+    "sec-auditor": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "audit": "node index.js"
+  },
+  "keywords": [
+    "security",
+    "audit",
+    "nodejs",
+    "react",
+    "ethical-hacking",
+    "pentest"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.16.1",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "glob": "^13.0.6",
+    "ignore": "^7.0.5",
+    "inquirer": "^13.4.3",
+    "ora": "^9.4.0",
+    "ws": "^8.20.1"
+  }
+}
