@@ -15,6 +15,7 @@ import FrontendAnalyzer from '../analyzers/FrontendAnalyzer.js';
 import SastAnalyzer from '../analyzers/SastAnalyzer.js';
 import SecretsAnalyzer from '../analyzers/SecretsAnalyzer.js';
 import DependencyAnalyzer from '../analyzers/DependencyAnalyzer.js';
+import OwaspAnalyzer from '../analyzers/OwaspAnalyzer.js';
 
 import HeadersScanner from '../dast/HeadersScanner.js';
 import XssScanner from '../dast/XssScanner.js';
@@ -141,7 +142,14 @@ class Orchestrator {
         this._collect(mod.getFindings());
       }
 
-      // Phase 4: Report
+      // Phase 4: OWASP Top 10 Analysis
+      await this._runPhase('OWASP Top 10 — 2021', async () => {
+        const analyzer = new OwaspAnalyzer(this.rootDir, this.fs, this.logger, this.url);
+        await analyzer.analyze();
+        this._collect(analyzer.getFindings());
+      });
+
+      // Phase 5: Report
       this.logger.section(t('phase_report'));
       const reporter = new Reporter(this.rootDir, this.fs, this.logger);
       const reportPath = reporter.generate(this.allFindings, this.meta);

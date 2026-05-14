@@ -3,7 +3,7 @@ let _counter = 1;
 export function resetCounter() { _counter = 1; }
 
 export class Finding {
-  constructor({ title, control_id, asvs_id, severity, description, remediation_steps, file = null, line = null, evidence_uri = null, category = 'general', attack_vector = null, request = null, response = null }) {
+  constructor({ title, control_id, asvs_id, severity, description, remediation_steps, file = null, line = null, evidence_uri = null, category = 'general', owasp = null, attack_vector = null, request = null, response = null }) {
     this.id = `SEC-${String(_counter++).padStart(3, '0')}`;
     this.title = title;
     this.control_id = control_id;
@@ -15,6 +15,7 @@ export class Finding {
     this.line = line;
     this.evidence_uri = evidence_uri;
     this.category = category;
+    this.owasp = owasp;
     this.attack_vector = attack_vector;
     this.request = request;
     this.response = response;
@@ -27,6 +28,7 @@ export class Finding {
       title: this.title,
       control_id: this.control_id,
       asvs_id: this.asvs_id,
+      owasp: this.owasp,
       severity: this.severity,
       evidence_uri: this.evidence_uri,
       description: this.description,

@@ -32,24 +32,33 @@ pnpm install
 
 ### 3. Ejecutar la auditoría
 
-Posicionarse en la **raíz del proyecto a auditar** y ejecutar el script pasando la URL de la aplicación como único parámetro:
-
 ```bash
-node /ruta/al/sec_auditor/index.js <URL>
+node /ruta/al/sec_auditor/index.js <URL> [path-al-codigo]
 ```
 
-**Ejemplo:**
+| Parámetro | Obligatorio | Descripción |
+|-----------|-------------|-------------|
+| `<URL>` | ✅ | URL completa de la aplicación objetivo (`http://` o `https://`) |
+| `[path-al-codigo]` | ❌ | Ruta al código fuente a analizar. Si se omite, usa el directorio actual (`cwd`) |
+
+**Ejemplos:**
 
 ```bash
+# Desde la raíz del proyecto a auditar (usa cwd como path)
 cd /mi/proyecto/nodejs-react
 node /ruta/al/sec_auditor/index.js https://myapp.example.com
+
+# Pasando el path explícitamente desde cualquier directorio
+node /ruta/al/sec_auditor/index.js http://localhost:3001 ./test-mockup
+
+# Con path absoluto
+node /ruta/al/sec_auditor/index.js https://myapp.example.com /ruta/absoluta/al/proyecto
 ```
 
 O bien, si se instaló de forma global con `pnpm link`:
 
 ```bash
-cd /mi/proyecto/nodejs-react
-sec-auditor https://myapp.example.com
+sec-auditor https://myapp.example.com /ruta/al/proyecto
 ```
 
 ### 4. Resultados
@@ -78,3 +87,6 @@ Uso: node index.js <URL>
 | Versión | Fecha | Característica |
 |---|---|---|
 | 1.0.0 | 2026-05-14 | Versión inicial. Analizadores SAST/DAST, escáneres de vectores de ataque (XSS, SQLi, SSRF, RCE, CSRF, Path Traversal, Open Redirect, Rate Limit, TLS, Headers, Auth, WebSocket), análisis de backend (Express/NestJS), análisis de frontend (React), escáner de secretos, análisis de dependencias, reporte JSON + texto plano con remediaciones según SEC.spec.md |
+| 1.1.0 | 2026-05-14 | Refactor a ESM (chalk v5, inquirer v13, ora v9). Soporte de segundo parámetro `[path-al-codigo]` para apuntar al código fuente desde cualquier directorio. Proyecto de prueba `test-mockup` con backend Express + frontend React con ~50% de vulnerabilidades intencionales |
+| 1.2.0 | 2026-05-14 | Sección **OWASP Top 10 — 2021** en el reporte con matriz de cumplimiento y puntuación. Nuevo `OwaspAnalyzer` con 12 verificaciones SAST+DAST propias (A01–A10): CORS wildcard, NestJS sin guards, hash débil MD5/SHA1, sin CSRF middleware, sin validación de schema, sin helmet, jwt.sign sin expiresIn, deserialización insegura, SSRF endpoints sensibles expuestos, sin logging estructurado, console.log con datos sensibles, sin logging de eventos de auth. Campo `owasp` agregado a cada Finding |
+| 1.3.0 | 2026-05-14 | **Matriz de cumplimiento gerencial SEC.spec.md** en el reporte: los 60 controles de los 11 dominios (Gobierno, Auth, Frontend, Backend, WebSocket, Criptografía, Infra, DevSecOps, Observabilidad, Privacidad, IA/Voz) con estado ✅ OK / ⚠️ PARCIAL / ❌ FALLO / ⚪ NO EVALUADO. Lógica severity threshold (critical/high → FALLO, medium → PARCIAL). Score de cumplimiento automático con barra visual. Resumen por dominio + tabla detallada. Sección posicionada al inicio del reporte para lectura gerencial |
